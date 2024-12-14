@@ -1,8 +1,0 @@
-  FOR x IN actsIn
-    FILTER x._from IN [ "actors/TomH", "actors/Keanu" ]
-    COLLECT actor = x._from INTO years = x.year
-    RETURN {
-      name: DOCUMENT(actor).name,
-      movies: COUNT(years),
-      years
-    }`
