@@ -1,34 +1,30 @@
 {
-    "name": "formatter-sample",
-    "displayName": "formatter-sample",
-    "description": "",
-    "version": "0.0.1",
-    "publisher": "jrieken",
+    "name": "aql-formatter",
+    "displayName": "aql-formatter",
+    "description": "Trying to create a custom AQL (ArangoDB's query language) formatter",
+    "version": "0.0.0",
+    "publisher": "CerealPlacebo5",
     "engines": {
-        "vscode": "^1.6.0"
+        "vscode": "^1.8.0"
     },
     "categories": [
         "Other"
     ],
     "activationEvents": [
-        "onLanguage:foo-lang"
+        "onLanguage:aql-arangodb"
     ],
     "main": "./out/src/extension",
     "contributes": {
         "languages": [
             {
-                "id": "foo-lang",
-                "aliases": [
-                    "Foo"
-                ],
-                "extensions": [
-                    "foo"
-                ]
+                "id": "aql-arangodb",
+                "aliases": ["AQL"],
+                "extensions": [".aql"]
             }
         ],
         "commands": [
             {
-                "command": "extension.format-foo",
+                "command": "extension.aql-formatter",
                 "title": "(Bad) Format Foo Files"
             }
         ]
@@ -38,7 +34,7 @@
     },
     "devDependencies": {
         "@types/node": "*",
-        "vscode": "1.0.3",
-        "typescript": "2.0.6"
+        "vscode": "1.1.37",
+        "typescript": "5.7.2"
     }
 }
