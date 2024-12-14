@@ -1,10 +1,14 @@
-# Good and Bad Formatter
+# First try at an AQL formatter for VS Code
 
 
-This is a sample for a simple (and stupid) formatter that integrates into VS Code in two way: Once as a [comm](https://github.com/jrieken/vscode-formatter-sample/blob/master/src/extension.ts#L8)[and](https://github.com/jrieken/vscode-formatter-sample/blob/master/package.json#L31) and once (better) 
-via the [formatter](https://github.com/jrieken/vscode-formatter-sample/blob/master/src/extension.ts#L23)-api. The latter as the following advantages:
+Homemade formatter for AQL file. AQL is a query language for ArangoDB.
 
-* is less code
-* is invoked from the formatter actions and keybindings
-* is invoked from format on save
-* is future proof for things like *format all files in folders* etc
+## How to use
+
+* Install an extension to allow custom scripts in VS Code. I use [Custom Local Formatters](https://github.com/JKillian/vscode-custom-local-formatters).
+* Follow the instructions in the extension to link the script 'formatter.js' to the extension.
+* When formatting an AQL file, the script will be executed and the file will be formatted.
+
+## How it works
+
+The script reads the input from stdin, formats it and writes the output to stdout.
