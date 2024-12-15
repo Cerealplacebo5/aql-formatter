@@ -3,7 +3,8 @@ type AnalyzedLine = {
     /** The value of the line */
     line: string;
     /** The type of the line */
-    type: "LET" | "FOR" | "RETURN" | "FILTER" | "OPTIONS" | "RETURN" | "CONDITION" | "UNKNOWN" | "COMMENT" | "LINE_COMMENT" | "BLOCK_COMMENT_START" | "BLOCK_COMMENT_END";
+    type: "LET" | "FOR" | "RETURN" | "FILTER" | "OPTIONS" | "RETURN" | "CONDITION" | "UNKNOWN" | "COMMENT" | "LINE_COMMENT"
+    | "BLOCK_COMMENT_START" | "BLOCK_COMMENT_END" | "END_PARENTHESIS" | "END_BRACKET" | "TERNARY_CONDITION";
 }
 
 // Create a function to read from stdin
@@ -67,9 +68,19 @@ const main = async () => {
         else if (trimmed_line.startsWith("OPTIONS")) analyzed_lines.push({ line: trimmed_line, type: "OPTIONS" });
         // The line is a multiline condition
         else if (trimmed_line.startsWith("||") || trimmed_line.startsWith("&&")) analyzed_lines.push({ line: trimmed_line, type: "CONDITION" });
+        // The line is an end parenthesis
+        else if (trimmed_line.startsWith(")")) analyzed_lines.push({ line: trimmed_line, type: "END_PARENTHESIS" });
+        // The line is an end bracket
+        else if (trimmed_line.startsWith("}")) analyzed_lines.push({ line: trimmed_line, type: "END_BRACKET" });
+        // The line is a ternary condition spread on multiple lines
+        else if (trimmed_line.startsWith("?") || trimmed_line.startsWith(":")) analyzed_lines.push({ line: trimmed_line, type: "TERNARY_CONDITION" });
         // The line is unknown
         else analyzed_lines.push({ line: trimmed_line, type: "UNKNOWN" });
     }
+
+
+    // debug_print(analyzed_lines);
+
     // Keep track of the indent level
     let indent_level = 0;
     // Keep track of the open logic blocks
@@ -79,9 +90,10 @@ const main = async () => {
 
     // Loop through the processed lines and format them
     for (let line_index = 0; line_index < analyzed_lines.length; line_index++) {
-        let post_decrease_indent = false;
+        let post_decrease_indent: number;
         let post_increase_indent = false;
         const line = analyzed_lines[line_index];
+        const next_line_type = analyzed_lines[line_index + 1]?.type;
         const previous_line_type = analyzed_lines[line_index - 1]?.type;
 
         // Indent the comment to the next line indent level
@@ -90,13 +102,65 @@ const main = async () => {
             update_previous_indent_level.push(line_index);
         }
         else {
-
             // Increase indent for a FOR if under a RETURN or a LET
             if (line.type === "FOR" && (previous_line_type === "RETURN" || previous_line_type === "LET")) indent_level++;
-            // Decrease indent after a RETURN
-            if (line.type === "RETURN") post_decrease_indent = true;
-            // Increase the indent after a FILTER
-            if (line.type === "FILTER") post_increase_indent = true;
+            // Increase indent for a FOR, and double decrease indent after a RETURN
+            if (line.type === "RETURN") post_decrease_indent = 1;
+            // Increase the indent after a FILTER, unless directly before a RETURN or another FILTER
+            if (line.type === "FILTER" && next_line_type !== "RETURN" && next_line_type !== "FILTER" && next_line_type !== "CONDITION") post_increase_indent = true;
+            // Increase the indent after a TERNARY_CONDITION, unless under another TERNARY_CONDITION
+            if (line.type === "TERNARY_CONDITION" && previous_line_type !== "TERNARY_CONDITION") indent_level++;
+            // Decrease the indent after a TERNARY_CONDITION, unless followed by another TERNARY_CONDITION
+            if (line.type === "TERNARY_CONDITION" && next_line_type !== "TERNARY_CONDITION") post_decrease_indent = 1;
+
+            // Increase the indent after a CONDITION, unless under another CONDITION
+            if (line.type === "CONDITION" && previous_line_type !== "CONDITION") indent_level++;
+            // Decrease the indent after a CONDITION, unless followed by another CONDITION
+            if (line.type === "CONDITION" && next_line_type !== "CONDITION") post_decrease_indent = 1;
+
+            // Retrieve the indent level of a line that ended with a start parenthesis
+            else if (line.type === "END_PARENTHESIS") {
+                let start_bracket_line_index = -1;
+                // Get the line that started the parenthesis
+                for (let i_line = line_index - 1; i_line >= 0; i_line--) {
+                    let temp_line = formatted_output[i_line] || "";
+                    // The line is a start parenthesis
+                    if (temp_line.endsWith("(")) {
+                        // Retrieve the indent level of the line that started the parenthesis
+                        indent_level = (temp_line.match(/\t/g) || []).length;
+                        start_bracket_line_index = i_line;
+                        break;
+                    }
+                }
+                // If the start bracket line index is found, increase the indent level of the lines between the start and end bracket
+                if (start_bracket_line_index !== -1) {
+                    for (let i_line = start_bracket_line_index + 1; i_line < line_index; i_line++) {
+                        let line_indent_level = ((formatted_output[i_line] || "").match(/\t/g) || []).length;
+                        if (line_indent_level < - indent_level) formatted_output[i_line] = "\t".repeat(indent_level + 1) + formatted_output[i_line].replace(/\t/g, "");
+                    }
+                }
+            }
+            // Retrieve the indent level of a line that ended with a start bracket
+            else if (line.type === "END_BRACKET") {
+                let start_bracket_line_index = -1;
+                // Get the line that started the bracket
+                for (let i_line = line_index - 1; i_line >= 0; i_line--) {
+                    let temp_line = formatted_output[i_line] || "";
+                    // The line is a start bracket
+                    if (temp_line.endsWith("{")) {
+                        indent_level = (temp_line.match(/\t/g) || []).length;
+                        start_bracket_line_index = i_line;
+                        break;
+                    }
+                }
+                // If the start bracket line index is found, increase the indent level of the lines between the start and end bracket
+                if (start_bracket_line_index !== -1) {
+                    for (let i_line = start_bracket_line_index + 1; i_line < line_index; i_line++) {
+                        let line_indent_level = ((formatted_output[i_line] || "").match(/\t/g) || []).length;
+                        if (line_indent_level < indent_level) formatted_output[i_line] = "\t".repeat(indent_level + 1) + formatted_output[i_line].replace(/\t/g, "");
+                    }
+                }
+            }
 
             // TODO
 
@@ -110,7 +174,11 @@ const main = async () => {
                 update_previous_indent_level = [];
             }
             // Decrease the indent
-            if (post_decrease_indent && indent_level > 0) indent_level--;
+            if (typeof post_decrease_indent == "number") {
+                indent_level -= post_decrease_indent;
+                post_decrease_indent = undefined;
+                if (indent_level < 0) indent_level = 0;
+            }
             // Increase the indent
             if (post_increase_indent) indent_level++;
         }
