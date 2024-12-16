@@ -29,3 +29,8 @@ Homemade formatter for AQL file. AQL is a query language for ArangoDB.
 ## How it works
 
 The script reads the input from stdin, formats it and writes the output to stdout.
+
+## TODO list
+* Capitalize the functions and keywords
+* Replace double whitespaces with a single whitespace
+* Space after a comma
