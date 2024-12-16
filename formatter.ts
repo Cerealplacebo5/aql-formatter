@@ -7,7 +7,7 @@ type AnalyzedLine = {
     | "BLOCK_COMMENT_START" | "BLOCK_COMMENT_END" | "END_PARENTHESIS" | "END_BRACKET" | "TERNARY_CONDITION";
 }
 
-// Create a function to read from stdin
+/** Create a function to read from stdin */
 const readStdin = () => new Promise((resolve) => {
     let data = "";
     process.stdin.on('data', chunk => data += chunk);
@@ -30,7 +30,7 @@ const main = async () => {
     // Prepare the output
     const analyzed_lines: AnalyzedLine[] = [];
     // The formatted output
-    const formatted_output: string[] = [];
+    let formatted_output: string[] = [];
     // Loop through the lines and categorize them for easier processing
     for (let line_index = 0; line_index < input_lines.length; line_index++) {
         // Get the current line
@@ -71,7 +71,7 @@ const main = async () => {
         // The line is an end parenthesis
         else if (trimmed_line.startsWith(")")) analyzed_lines.push({ line: trimmed_line, type: "END_PARENTHESIS" });
         // The line is an end bracket
-        else if (trimmed_line.startsWith("}")) analyzed_lines.push({ line: trimmed_line, type: "END_BRACKET" });
+        else if (trimmed_line.startsWith("}") || trimmed_line.endsWith("},")) analyzed_lines.push({ line: trimmed_line, type: "END_BRACKET" });
         // The line is a ternary condition spread on multiple lines
         else if (trimmed_line.startsWith("?") || trimmed_line.startsWith(":")) analyzed_lines.push({ line: trimmed_line, type: "TERNARY_CONDITION" });
         // The line is unknown
@@ -83,8 +83,6 @@ const main = async () => {
 
     // Keep track of the indent level
     let indent_level = 0;
-    // Keep track of the open logic blocks
-    const logic_blocks: (AnalyzedLine["type"] | "COMMENT")[] = [];
     // Flag for updating the indent level of the previous line with the current one
     let update_previous_indent_level: number[] = [];
 
@@ -104,8 +102,11 @@ const main = async () => {
         else {
             // Increase indent for a FOR if under a RETURN or a LET
             if (line.type === "FOR" && (previous_line_type === "RETURN" || previous_line_type === "LET")) indent_level++;
-            // Increase indent for a FOR, and double decrease indent after a RETURN
-            if (line.type === "RETURN") post_decrease_indent = 1;
+            // Increase indent for a FOR, and double decrease indent after a RETURN, unless if it's the start of a multiline object definition
+            if (line.type === "RETURN") {
+                if (line.line.endsWith("{")) post_increase_indent = true;
+                else post_decrease_indent = 1;
+            }
             // Increase the indent after a FILTER, unless directly before a RETURN or another FILTER
             if (line.type === "FILTER" && next_line_type !== "RETURN" && next_line_type !== "FILTER" && next_line_type !== "CONDITION") post_increase_indent = true;
             // Increase the indent after a TERNARY_CONDITION, unless under another TERNARY_CONDITION
@@ -121,48 +122,73 @@ const main = async () => {
             // Retrieve the indent level of a line that ended with a start parenthesis
             else if (line.type === "END_PARENTHESIS") {
                 let start_bracket_line_index = -1;
+                let has_special_between_parenthesis = false;
                 // Get the line that started the parenthesis
                 for (let i_line = line_index - 1; i_line >= 0; i_line--) {
+                    let analyzed_line = analyzed_lines[i_line];
                     let temp_line = formatted_output[i_line] || "";
                     // The line is a start parenthesis
                     if (temp_line.endsWith("(")) {
+                        // Check if the last word is a function call
+                        let separated_by_whitespace = temp_line.split(" ");
+                        let last_word = separated_by_whitespace[separated_by_whitespace.length - 1];
+                        // Last word is a function call, so increase the indent level
+                        if (last_word.length > 1) has_special_between_parenthesis = false;
                         // Retrieve the indent level of the line that started the parenthesis
                         indent_level = (temp_line.match(/\t/g) || []).length;
                         start_bracket_line_index = i_line;
                         break;
                     }
+                    else if (analyzed_line?.type !== "UNKNOWN") has_special_between_parenthesis = true;
                 }
                 // If the start bracket line index is found, increase the indent level of the lines between the start and end bracket
                 if (start_bracket_line_index !== -1) {
+                    // If there is no special character between the parenthesis, increase the indent level
+                    if (!has_special_between_parenthesis) indent_level++;
                     for (let i_line = start_bracket_line_index + 1; i_line < line_index; i_line++) {
                         let line_indent_level = ((formatted_output[i_line] || "").match(/\t/g) || []).length;
-                        if (line_indent_level < - indent_level) formatted_output[i_line] = "\t".repeat(indent_level + 1) + formatted_output[i_line].replace(/\t/g, "");
+                        if (line_indent_level < indent_level) formatted_output[i_line] = "\t".repeat(indent_level) + formatted_output[i_line].replace(/\t/g, "");
                     }
+                    // If there is no special character between the parenthesis, decrease the indent level
+                    if (!has_special_between_parenthesis) indent_level--;
                 }
             }
             // Retrieve the indent level of a line that ended with a start bracket
             else if (line.type === "END_BRACKET") {
+                let end_bracket_uncompleted = 0;
                 let start_bracket_line_index = -1;
+                let has_special_between_parenthesis = false;
                 // Get the line that started the bracket
                 for (let i_line = line_index - 1; i_line >= 0; i_line--) {
+                    let analyzed_line = analyzed_lines[i_line];
                     let temp_line = formatted_output[i_line] || "";
+
+                    if (temp_line.endsWith("}") || temp_line.endsWith("},")) end_bracket_uncompleted++;
+
                     // The line is a start bracket
                     if (temp_line.endsWith("{")) {
-                        indent_level = (temp_line.match(/\t/g) || []).length;
-                        start_bracket_line_index = i_line;
-                        break;
+                        if (end_bracket_uncompleted > 0) end_bracket_uncompleted--;
+                        else {
+                            // Retrieve the indent level of the line that started the parenthesis
+                            indent_level = (temp_line.match(/\t/g) || []).length;
+                            start_bracket_line_index = i_line;
+                            break;
+                        }
                     }
+                    else if (analyzed_line?.type !== "UNKNOWN") has_special_between_parenthesis = true;
                 }
                 // If the start bracket line index is found, increase the indent level of the lines between the start and end bracket
                 if (start_bracket_line_index !== -1) {
+                    // If there is no special character between the parenthesis, increase the indent level
+                    if (!has_special_between_parenthesis) indent_level++;
                     for (let i_line = start_bracket_line_index + 1; i_line < line_index; i_line++) {
                         let line_indent_level = ((formatted_output[i_line] || "").match(/\t/g) || []).length;
-                        if (line_indent_level < indent_level) formatted_output[i_line] = "\t".repeat(indent_level + 1) + formatted_output[i_line].replace(/\t/g, "");
+                        if (line_indent_level < indent_level) formatted_output[i_line] = "\t".repeat(indent_level) + formatted_output[i_line].replace(/\t/g, "");
                     }
+                    // If there is no special character between the parenthesis, decrease the indent level
+                    if (!has_special_between_parenthesis) indent_level--;
                 }
             }
-
-            // TODO
 
             // Create the indentation string with the current indent level
             const indentation = "\t".repeat(indent_level);
