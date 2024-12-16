@@ -7,6 +7,12 @@ type AnalyzedLine = {
     | "BLOCK_COMMENT_START" | "BLOCK_COMMENT_END" | "END_PARENTHESIS" | "END_BRACKET" | "TERNARY_CONDITION";
 }
 
+const KEY_WORDS = [
+    "LET", "FILTER", "IN", "FOR", "RETURN", "OPTIONS", "LIMIT", "SEARCH", "SORT", "LIMIT",
+    "COLLECT", "WINDOW", "REMOVE", "UPDATE", "REPLACE", "INSERT", "UPSERT", "WITH", "ANY", 
+    "OUTBOUND", "INBOUND"
+];
+
 /** Create a function to read from stdin */
 const readStdin = () => new Promise((resolve) => {
     let data = "";
@@ -36,7 +42,8 @@ const main = async () => {
         // Get the current line
         const line = input_lines[line_index];
         // Remove leading and trailing whitespace
-        const trimmed_line = line.trim();
+        let trimmed_line = line.trim();
+
         // The current line is part of a block comment
         let is_in_block_comment = false;
         for (let i = analyzed_lines.length - 1; i >= 0; i--) {
@@ -56,30 +63,43 @@ const main = async () => {
         else if (trimmed_line.startsWith("/*") && !trimmed_line.includes("*/")) analyzed_lines.push({ line: trimmed_line, type: "BLOCK_COMMENT_START" });
         // Is the line the end of a block comment?
         else if (trimmed_line.endsWith("*/")) analyzed_lines.push({ line: trimmed_line, type: "BLOCK_COMMENT_END" });
-        // The line is a declaration of a variable
-        else if (trimmed_line.startsWith("LET")) analyzed_lines.push({ line: trimmed_line, type: "LET" });
-        // The line is a FOR loop
-        else if (trimmed_line.startsWith("FOR")) analyzed_lines.push({ line: trimmed_line, type: "FOR" });
-        // The line is a RETURN statement
-        else if (trimmed_line.startsWith("RETURN")) analyzed_lines.push({ line: trimmed_line, type: "RETURN" });
-        // The line is a FILTER statement
-        else if (trimmed_line.startsWith("FILTER")) analyzed_lines.push({ line: trimmed_line, type: "FILTER" });
-        // The line is an OPTIONS statement
-        else if (trimmed_line.startsWith("OPTIONS")) analyzed_lines.push({ line: trimmed_line, type: "OPTIONS" });
-        // The line is a multiline condition
-        else if (trimmed_line.startsWith("||") || trimmed_line.startsWith("&&")) analyzed_lines.push({ line: trimmed_line, type: "CONDITION" });
-        // The line is an end parenthesis
-        else if (trimmed_line.startsWith(")")) analyzed_lines.push({ line: trimmed_line, type: "END_PARENTHESIS" });
-        // The line is an end bracket
-        else if (trimmed_line.startsWith("}") || trimmed_line.endsWith("},")) analyzed_lines.push({ line: trimmed_line, type: "END_BRACKET" });
-        // The line is a ternary condition spread on multiple lines
-        else if (trimmed_line.startsWith("?") || trimmed_line.startsWith(":")) analyzed_lines.push({ line: trimmed_line, type: "TERNARY_CONDITION" });
-        // The line is unknown
-        else analyzed_lines.push({ line: trimmed_line, type: "UNKNOWN" });
+
+        // Line is not a comment
+        else {
+
+            // Convert double whitespace to a single whitespace
+            trimmed_line = trimmed_line.replace(/\s+/g, " ");
+            // Capitalize the keywords
+            for (let keyword of KEY_WORDS) {
+                let regex = new RegExp(`\\b${keyword}\\b`, "ig");
+                trimmed_line = trimmed_line.replace(regex, keyword.toUpperCase());
+            }
+
+            // Replace commas with a comma followed by a space
+            trimmed_line = trimmed_line.replace(/,\s*/g, ", ");
+
+            // The line is a declaration of a variable
+            if (trimmed_line.startsWith("LET")) analyzed_lines.push({ line: trimmed_line, type: "LET" });
+            // The line is a FOR loop
+            else if (trimmed_line.startsWith("FOR")) analyzed_lines.push({ line: trimmed_line, type: "FOR" });
+            // The line is a RETURN statement
+            else if (trimmed_line.startsWith("RETURN")) analyzed_lines.push({ line: trimmed_line, type: "RETURN" });
+            // The line is a FILTER statement
+            else if (trimmed_line.startsWith("FILTER")) analyzed_lines.push({ line: trimmed_line, type: "FILTER" });
+            // The line is an OPTIONS statement
+            else if (trimmed_line.startsWith("OPTIONS")) analyzed_lines.push({ line: trimmed_line, type: "OPTIONS" });
+            // The line is a multiline condition
+            else if (trimmed_line.startsWith("||") || trimmed_line.startsWith("&&")) analyzed_lines.push({ line: trimmed_line, type: "CONDITION" });
+            // The line is an end parenthesis
+            else if (trimmed_line.startsWith(")")) analyzed_lines.push({ line: trimmed_line, type: "END_PARENTHESIS" });
+            // The line is an end bracket
+            else if (trimmed_line.startsWith("}") || trimmed_line.endsWith("},")) analyzed_lines.push({ line: trimmed_line, type: "END_BRACKET" });
+            // The line is a ternary condition spread on multiple lines
+            else if (trimmed_line.startsWith("?") || trimmed_line.startsWith(":")) analyzed_lines.push({ line: trimmed_line, type: "TERNARY_CONDITION" });
+            // The line is unknown
+            else analyzed_lines.push({ line: trimmed_line, type: "UNKNOWN" });
+        }
     }
-
-
-    // debug_print(analyzed_lines);
 
     // Keep track of the indent level
     let indent_level = 0;
